@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from cleo.io.null_io import NullIO
+import json
 
 from poetry.factory import Factory
 from poetry.publishing.uploader import Uploader
@@ -108,15 +109,24 @@ def test_uploader_properly_handles_301_redirects(
 def test_uploader_registers_for_appropriate_400_errors(
     mocker: MockerFixture, http: type[httpretty.httpretty], uploader: Uploader
 ) -> None:
-    register = mocker.patch("poetry.publishing.uploader.Uploader._register")
+    
+    def test(request, uri, response_headers):
+        if request.headers["Content-Type"].startswith("multipart/form-data"):
+            return [400, response_headers, "Test test"]
+        else:
+            return [400, response_headers, "No package was ever registered"]
+
+    # register = mocker.patch("poetry.publishing.uploader.Uploader._register")
     http.register_uri(
-        http.POST, "https://foo.com", status=400, body="No package was ever registered"
+        http.POST, "https://foo.com", body=test
     )
 
-    with pytest.raises(UploadError):
+    with pytest.raises(UploadError) as upload_error:
         uploader.upload("https://foo.com")
 
-    assert register.call_count == 1
+    assert upload_error.value == ""
+
+    # assert register.call_count == 1
 
 
 @pytest.mark.parametrize(
